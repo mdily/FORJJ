@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="https://unpkg.com/element-ui@2.4.8/lib/theme-chalk/index.css">
+    <title>窗纱图表</title>
+</head>
+<body>
+    <div id="app">
+        <input type="file" :multiple="false" id="sheetjs-input" accept="' + SheetJSFT + '" @change="onchange" /><br><br>
+        <div v-for="(name, index) in sheetName" :key="index">
+            <el-switch
+                v-model="isViewAllLine[index]"
+                active-color="#13ce66"
+                inactive-color="#ff4949"
+                active-text="显示全部折线"
+                inactive-text="不显示折线"
+                :active-value="1"
+                :inactive-value="0"
+                @change="changeViewLine(index, $event)"
+                style="margin-bottom: 10px;">
+            </el-switch><br>
+            <label style="font-size: 12px;">项目名称</label>
+            <el-select v-model="selectItem[index]" multiple collapse-tags
+                filterable size="mini" @change="changeSelectItem(index, $event)" style="width: 300px; margin-bottom: 10px;" placeholder="可多选，可输入搜索">
+                <el-option v-for="(_item, _index) in allSelectData[index]" :label="_item" :value="_item" :key="_item"></el-option>
+            </el-select>
+            <div :id="'chart-' + index" class="chart"></div>
+        </div>
+        <!--<el-dialog :visible.sync="dialogVisible" :title="dialogTitle" width="80%">-->
+            <!--单条记录-->
+        <!--</el-dialog>-->
+    </div>
+</body>
+<script src="https://cdn.jsdelivr.net/npm/vue@2.5.17/dist/vue.js"></script>
+<script src="https://unpkg.com/element-ui@2.4.8/lib/index.js"></script>
+<script lang="javascript" src="./xlsx.full.min.js"></script>
+<script lang="javascript" src="./echarts.min.js"></script>
+<script>
+    new Vue({
+        el: '#app',
+        data: function() {
+            return {
+                excelData: [],
+                sheetName: [],
+                isViewAllLine: [],
+                allSelectData: [],
+                selectItem: []
+//                dialogVisible: false,
+//                dialogTitle: '单条折线图'
+            }
+        },
+        computed: {
+            sheetJSFT: function() {
+                return [
+                    "xlsx", "xlsb", "xlsm", "xls", "xml", "csv", "txt", "ods", "fods", "uos", "sylk", "dif", "dbf", "prn", "qpw", "123", "wb*", "wq*", "html", "htm"
+                ].map(function(x) { return "." + x; }).join(",")
+            }
+        },
+        methods: {
+            changeViewLine: function(index, isView) {
+                this.isViewAllLine[index] = isView;
+                this.handleData(this.excelData, this.sheetName, null)
+            },
+            changeSelectItem: function (index, select) {
+                this.selectItem[index] = select;
+                this.handleData(this.excelData, this.sheetName, this.selectItem)
+            },
+            onchange: function(evt) {
+                var file;
+                var files = evt.target.files;
+                if (!files || files.length === 0) return;
+                file = files[0];
+
+                var fileReader = new FileReader();
+                var self = this;
+                fileReader.onload = function (e) {
+                    try {
+                        // pre-process data
+                        var binary = "";
+                        var bytes = new Uint8Array(e.target.result);
+                        var length = bytes.byteLength;
+                        for (var i  = 0; i < length; i++) {
+                            binary += String.fromCharCode(bytes[i]);
+                        }
+//                        var binary = e.target.result;
+                        // read workbook
+                        try {
+                            var wb = XLSX.read(binary, {type: 'binary'});
+                        } catch (e) {
+                            var wb = XLS.read(binary, {type: 'binary'});
+                        }
+                    } catch (e) {
+                        alert('文件类型不正确，请上传excel文件');
+                        return;
+                    }
+                    // 表格的表格范围，可用于判断表头的数量是否正确
+                    var fromTo = '';
+                    // 遍历每张表
+                    for (var sheet in wb.Sheets) {
+                        if (wb.Sheets.hasOwnProperty(sheet)) {
+                            fromTo = wb.Sheets[sheet]['!ref'];
+                            self.excelData.push(XLSX.utils.sheet_to_json(wb.Sheets[sheet]));
+                            self.sheetName.push(sheet);
+                            self.isViewAllLine.push(0);
+                            self.selectItem.push([]);
+                            self.allSelectData.push(self.getLegendData(XLSX.utils.sheet_to_json(wb.Sheets[sheet])))
+                        }
+                    }
+                    self.handleData(self.excelData, self.sheetName, null);
+                };
+                fileReader.readAsArrayBuffer(file);
+            },
+            handleData: function(data, sheetName, selectItem) {
+                var self = this;
+                sheetName.forEach(function (val, index, arr) {
+                    const legendData = self.getLegendData(data[index]);
+                    const xAxisData = self.getXAxisData(data[index]);
+                    const seriesData = self.getSeriesData(data[index]);
+                    var _self = self;
+                    self.$nextTick(function () {
+                        var myChart = echarts.init(document.getElementById('chart-' + index));
+                        var option = {
+                            title: {
+                                text: val
+                            },
+                            tooltip: {
+                                trigger: 'axis',
+                                formatter: function (params) {
+                                    var res = '<p>日期：'+ params[0].name + '</p>';
+                                    params.forEach(function (val, index, arr) {
+                                        if (val.value > 0) {
+                                            res += '<p>' + val.seriesName + '：' + val.value + '</p>';
+                                        }
+                                    });
+                                    return res
+                                }
+                            },
+                            legend: {
+                                type: "plain",
+                                data: legendData,
+                                left: 80,
+                                right: 50,
+                                height: 100,
+                                top: 0,
+                                selected: selectItem && selectItem[index] && selectItem[index].length > 0 ? self.getLegendSeleted(legendData, selectItem[index], 0) : self.getLegendSeleted(legendData, null, self.isViewAllLine[index]),
+                                textStyle: {
+                                    fontSize: 12,
+                                    lineHeight: 40
+                                }
+                            },
+                            grid: {
+                                left: '3%',
+                                right: '4%',
+                                bottom: '3%',
+                                containLabel: true
+                            },
+                            toolbox: {
+                                feature: {
+                                    saveAsImage: {}
+                                }
+                            },
+                            xAxis: {
+                                type: 'category',
+                                boundaryGap: false,
+                                data: xAxisData
+                            },
+                            yAxis: {
+                                type: 'value'
+                            },
+                            series: seriesData
+                        };
+                        myChart.setOption(option);
+//                        myChart.on('click', function (params) {
+//                            console.log(params);
+//                            _self.dialogVisible = true
+//                        })
+                    });
+                })
+            },
+            getLegendSeleted: function(legendData, selectIndexItem, isView) {
+                const res = new Object();
+                var self = this;
+                legendData.forEach(function (val, index, arr) {
+                    if (selectIndexItem && selectIndexItem.length > 0 && selectIndexItem.includes(val)) {
+                        res[val] = true
+                    } else {
+                        res[val] = isView ? true : false
+                    }
+                });
+                return res;
+            },
+            getSeriesData: function (excelData) {
+                const seriesData = [];
+                var self = this;
+                excelData.forEach(function (val, index, arr) {
+                    const name = val['中文'] || val['asin'];
+                    const type = 'line';
+                    const data = self.getSeriesDataData(val);
+                    seriesData.push({
+                        name: name,
+                        type: type,
+                        data: data })
+                });
+                return seriesData;
+            },
+            getSeriesDataData: function (itemData) {
+                const res = [];
+                for (const key in itemData) {
+                    if (!isNaN(Number(key)) || key === '求和项:quantity') {
+                        const value = itemData[key];
+                        res.push(value);
+                    }
+                }
+                return res;
+            },
+            getLegendData: function (excelData) {
+                const res = [];
+                excelData.forEach(function (val, index, arr) {
+                    const name = val['中文'] || val['asin'];
+                    res.push(name)
+                });
+                return res;
+            },
+            getXAxisData: function (excelData) {
+                const xAxisData = [];
+                var self = this;
+                const val = excelData[0];
+                for (const key in val) {
+                    if (!isNaN(Number(key)) || key === '求和项:quantity') {
+                        if (!isNaN(Number(key))) {
+                            const date = self.getDate(Number(key));
+                            xAxisData.push(date);
+                        } else {
+                            xAxisData.push(key);
+                        }
+                    }
+                }
+                return xAxisData;
+            },
+            getDate: function (num) {
+                const initNum = 43383;
+                const initDate = new Date("2018-10-10 00:00:00");
+                const date = new Date();
+                if (num > initNum) {
+                    date.setDate(initDate.getDate() + (num - initNum));
+                } else {
+                    date.setDate(initDate.getDate() + (initNum - num));
+                }
+                return date.getFullYear() + '年' + (date.getMonth() + 1) + '月' + date.getDate()
+            }
+        }
+    })
+</script>
+<style>
+    .chart {
+        width: 100%;
+        height: 800px;
+    }
+</style>
+</html>

@@ -1,0 +1,10 @@
+使用前期准备：
+	1. 使用前先下载python：https://www.python.org/downloads/release/python-356/  （对应系统下载对应的python）
+	2. 下载完成将python路径添加到环境变量中   https://jingyan.baidu.com/article/bea41d436879a4b4c51be6f9.html
+
+使用说明：
+	1. 将后台下载的txt文件命名成 "年-月-日.txt" 栗子：2018-9-15.txt (日期必须是今天)  这个是否需要一定是今天？
+	2. 将所需的txt文件放在和 txt_to_excel.py 文件同一个文件夹中
+	3. 进入txt_to_excel.py所在文件夹，打开终端(cmd)  方法：在当前文件夹下按住shfit点击右键，选择“在此处打开命令窗口”--黑框框
+	4. 输入  python txt_to_excel.py
+	5. ok
