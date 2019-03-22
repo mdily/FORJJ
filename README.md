@@ -1,5 +1,4 @@
-# FORJJ
-JJ script
+# script
 
 1. 亚马逊txt文件转换成excel文件，整合编码问题和导入excel前缀无0的问题（python）
 
